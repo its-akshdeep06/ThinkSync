@@ -4,15 +4,12 @@ import { authMiddleware } from '../middleware/auth.js';
 
 const router = Router();
 
-// POST /api/analyze/submit — Submit an intent for analysis
+// POST /api/analyze/submit - submit intent for analysis
 router.post('/submit', authMiddleware, async (req, res) => {
   try {
-    const { repo_id, intent_text } = req.body;
-    if (!repo_id || !intent_text) {
-      return res.status(400).json({ error: 'Missing repo_id or intent_text' });
-    }
+    const { repo_id, intent } = req.body;
+    if (!repo_id || !intent) return res.status(400).json({ error: 'Missing repo_id or intent' });
 
-    // Verify repo ownership and status
     const { data: repo, error: repoErr } = await supabase
       .from('repositories')
       .select('*')
@@ -20,22 +17,18 @@ router.post('/submit', authMiddleware, async (req, res) => {
       .eq('user_id', req.user.id)
       .single();
 
-    if (repoErr || !repo) {
-      return res.status(404).json({ error: 'Repository not found' });
-    }
-
+    if (repoErr || !repo) return res.status(404).json({ error: 'Repository not found' });
     if (repo.status !== 'ready') {
       return res.status(400).json({ error: 'Repository is not yet indexed. Please wait for indexing to complete.' });
     }
 
-    // Create the analysis job
     const { data: job, error: jobErr } = await supabase
       .from('jobs')
       .insert({
         repo_id,
         type: 'analyze-intent',
         status: 'running',
-        intent_text,
+        intent_text: intent,
         progress_pct: 0,
         outcome: null,
       })
@@ -47,9 +40,7 @@ router.post('/submit', authMiddleware, async (req, res) => {
       return res.status(500).json({ error: 'Failed to create analysis job' });
     }
 
-    // Simulate async processing — update progress over time
-    simulateAnalysis(job.id, repo, intent_text);
-
+    simulateAnalysis(job.id, repo, intent);
     res.json({ job_id: job.id });
   } catch (err) {
     console.error('Submit analysis error:', err);
@@ -57,20 +48,17 @@ router.post('/submit', authMiddleware, async (req, res) => {
   }
 });
 
-// GET /api/analyze/:id/result — Get analysis result
-router.get('/:id/result', authMiddleware, async (req, res) => {
+// GET /api/analyze/result/:jobId - get analysis result
+router.get('/result/:jobId', authMiddleware, async (req, res) => {
   try {
-    const { data: job, error: jobErr } = await supabase
+    const { data: job, error } = await supabase
       .from('jobs')
       .select('*')
-      .eq('id', req.params.id)
+      .eq('id', req.params.jobId)
       .single();
 
-    if (jobErr || !job) {
-      return res.status(404).json({ error: 'Job not found' });
-    }
+    if (error || !job) return res.status(404).json({ error: 'Job not found' });
 
-    // Verify ownership via repo
     const { data: repo, error: repoErr } = await supabase
       .from('repositories')
       .select('*')
@@ -81,37 +69,17 @@ router.get('/:id/result', authMiddleware, async (req, res) => {
       return res.status(403).json({ error: 'Access denied' });
     }
 
-    res.json({
-      job: {
-        id: job.id,
-        type: job.type,
-        status: job.status,
-        intent_text: job.intent_text,
-        pr_url: job.pr_url,
-        pr_number: job.pr_number,
-        progress_pct: job.progress_pct,
-        created_at: job.created_at,
-        error_msg: job.error_msg,
-      },
-      result: job.outcome || generateDemoResult(job.intent_text, repo),
-      repo: {
-        id: repo.id,
-        name: repo.name,
-        full_name: repo.full_name,
-        github_repo_url: repo.github_repo_url,
-      },
-    });
+    if (job.status !== 'complete') {
+      return res.status(202).json({ status: job.status, progress: job.progress_pct });
+    }
+
+    res.json({ result: job.outcome });
   } catch (err) {
     console.error('Get analysis result error:', err);
     res.status(500).json({ error: 'Failed to get analysis result' });
   }
 });
 
-/**
- * Simulate an AI analysis pipeline by updating job progress over time.
- * In production this would call OpenAI/Claude/etc. For now it creates
- * realistic-looking progress updates and a demo result.
- */
 async function simulateAnalysis(jobId, repo, intentText) {
   const stages = [
     { pct: 15, delay: 2000 },
@@ -129,7 +97,6 @@ async function simulateAnalysis(jobId, repo, intentText) {
       .eq('id', jobId);
   }
 
-  // Complete with demo outcome
   const outcome = generateDemoResult(intentText, repo);
 
   await sleep(1500);
@@ -143,9 +110,6 @@ async function simulateAnalysis(jobId, repo, intentText) {
     .eq('id', jobId);
 }
 
-/**
- * Generate a realistic demo analysis result based on the intent text.
- */
 function generateDemoResult(intentText, repo) {
   const repoName = repo?.name || 'project';
 

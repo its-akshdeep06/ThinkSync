@@ -6,6 +6,20 @@ import { getGitHubUser } from '../lib/github.js';
 const router = Router();
 const isProduction = process.env.NODE_ENV === 'production';
 
+function getFrontendUrl(req) {
+  const fallback = process.env.FRONTEND_URL || 'http://localhost:3000';
+  const origin = req.headers.origin || process.env.FRONTEND_URL || fallback;
+  try {
+    return new URL(origin).origin;
+  } catch {
+    return fallback;
+  }
+}
+
+function getCallbackUrl(req) {
+  return `${getFrontendUrl(req)}/api/auth/callback`;
+}
+
 // GET /api/auth/github - redirect to GitHub OAuth
 router.get('/github', (req, res) => {
   const state = Buffer.from(JSON.stringify({
@@ -15,7 +29,7 @@ router.get('/github', (req, res) => {
 
   const params = new URLSearchParams({
     client_id: process.env.GITHUB_CLIENT_ID,
-    redirect_uri: `${process.env.FRONTEND_URL}/api/auth/callback`,
+    redirect_uri: getCallbackUrl(req),
     scope: 'repo user read:org',
     state,
   });
@@ -28,6 +42,8 @@ router.post('/github/callback', async (req, res) => {
     const { code } = req.body;
     if (!code) return res.status(400).json({ error: 'Missing code' });
 
+    const redirect_uri = getCallbackUrl(req);
+
     // Exchange code for access token
     const tokenRes = await fetch('https://github.com/login/oauth/access_token', {
       method: 'POST',
@@ -39,6 +55,7 @@ router.post('/github/callback', async (req, res) => {
         client_id: process.env.GITHUB_CLIENT_ID,
         client_secret: process.env.GITHUB_CLIENT_SECRET,
         code,
+        redirect_uri,
       }),
     });
     const tokenData = await tokenRes.json();

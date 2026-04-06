@@ -43,6 +43,7 @@ export function GitHubConnectButton({
   
   return (
     <button
+      type="button"
       onClick={onClick}
       className={`
         group relative inline-flex items-center justify-center

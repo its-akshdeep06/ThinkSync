@@ -195,7 +195,15 @@ export const api = {
     },
   },
 
-  // ─── Health ─────────────────────────────────────────────────
-  health: () =>
-    apiFetch<{ status: string }>('/health', { skipAuth: true }),
+  // ─── Analyze ─────────────────────────────────────────────────
+  analyze: {
+    submit: (repoId: string, intent: string) =>
+      apiFetch<{ job_id: string }>('/api/analyze/submit', {
+        method: 'POST',
+        body: JSON.stringify({ repo_id: repoId, intent }),
+      }),
+
+    getResult: (jobId: string) =>
+      apiFetch<{ result: any }>(`/api/analyze/result/${jobId}`),
+  },
 };
