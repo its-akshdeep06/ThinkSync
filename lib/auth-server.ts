@@ -1,6 +1,12 @@
-import jwt from 'jsonwebtoken'
+import { SignJWT, jwtVerify } from 'jose'
 import { NextRequest } from 'next/server'
 import { supabase } from './supabase-server'
+
+const JWT_SECRET_RAW = process.env.JWT_SECRET ?? 'thinksync-jwt-secret-k9x2m7p4q8r3n6w1'
+
+function secret() {
+  return new TextEncoder().encode(JWT_SECRET_RAW)
+}
 
 /**
  * Extract and verify the JWT from the request (Authorization header or cookie).
@@ -14,12 +20,11 @@ export async function getAuthUser(req: NextRequest): Promise<any | null> {
   if (!token) return null
 
   try {
-    const jwtSecret = process.env.JWT_SECRET ?? 'thinksync-jwt-secret-k9x2m7p4q8r3n6w1'
-    const decoded = jwt.verify(token, jwtSecret) as any
+    const { payload } = await jwtVerify(token, secret())
     const { data: user } = await supabase
       .from('users')
       .select('*')
-      .eq('id', decoded.userId)
+      .eq('id', (payload as any).userId)
       .single()
     return user ?? null
   } catch {
@@ -28,13 +33,15 @@ export async function getAuthUser(req: NextRequest): Promise<any | null> {
 }
 
 /**
- * Sign a JWT for a user row.
+ * Sign a JWT for a user row. Returns a Promise<string>.
  */
-export function createToken(user: { id: string; github_id: number; login: string }): string {
-  const jwtSecret = process.env.JWT_SECRET ?? 'thinksync-jwt-secret-k9x2m7p4q8r3n6w1'
-  return jwt.sign(
-    { userId: user.id, githubId: user.github_id, login: user.login },
-    jwtSecret,
-    { expiresIn: '7d' }
-  )
+export async function createToken(user: {
+  id: string
+  github_id: number
+  login: string
+}): Promise<string> {
+  return new SignJWT({ userId: user.id, githubId: user.github_id, login: user.login })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setExpirationTime('7d')
+    .sign(secret())
 }

@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Database error' }, { status: 500 })
     }
 
-    const token = createToken(user)
+    const token = await createToken(user)
     const isProduction = process.env.NODE_ENV === 'production'
 
     const response = NextResponse.json({
