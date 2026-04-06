@@ -122,6 +122,12 @@ export const api = {
 
     delete: (id: string) =>
       apiFetch<{ success: boolean }>(`/api/repos/${id}`, { method: 'DELETE' }),
+
+    reindex: (id: string) =>
+      apiFetch<{ success: boolean; job_id: string }>(`/api/repos/${id}/reindex`, { method: 'POST' }),
+
+    getGraph: (id: string) =>
+      apiFetch<any>(`/api/repos/${id}/graph`),
   },
 
   // ─── Jobs ───────────────────────────────────────────────────
@@ -137,6 +143,18 @@ export const api = {
       const query = qs.toString();
       return apiFetch<{ jobs: any[] }>(`/api/jobs${query ? `?${query}` : ''}`);
     },
+  },
+
+  // ─── Analyze (intent → plan) ─────────────────────────────────
+  analyze: {
+    submit: (repoId: string, intent: string) =>
+      apiFetch<{ job_id: string }>('/api/analyze', {
+        method: 'POST',
+        body: JSON.stringify({ repo_id: repoId, intent }),
+      }),
+
+    getResult: (jobId: string) =>
+      apiFetch<{ job: any; result: any; repo: any }>(`/api/analyze/${jobId}`),
   },
 
   // ─── Health ─────────────────────────────────────────────────

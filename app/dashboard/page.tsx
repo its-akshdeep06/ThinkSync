@@ -110,7 +110,7 @@ function DashboardContent() {
 
   // Poll for updates when repos are indexing
   useEffect(() => {
-    const hasIndexing = repos.some(r => r.status === 'indexing')
+    const hasIndexing = repos.some(r => r.status === 'indexing' || r.status === 'pending')
     if (!hasIndexing) return
     const interval = setInterval(fetchRepos, 5000)
     return () => clearInterval(interval)

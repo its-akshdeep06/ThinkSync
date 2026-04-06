@@ -7,6 +7,7 @@ dotenv.config();
 import authRoutes from './routes/auth.js';
 import repoRoutes from './routes/repos.js';
 import jobRoutes from './routes/jobs.js';
+import analyzeRoutes from './routes/analyze.js';
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -44,6 +45,7 @@ app.get('/health', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/repos', repoRoutes);
 app.use('/api/jobs', jobRoutes);
+app.use('/api/analyze', analyzeRoutes);
 
 // Error handler
 app.use((err, req, res, next) => {

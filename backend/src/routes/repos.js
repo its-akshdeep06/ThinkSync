@@ -2,6 +2,7 @@ import { Router } from 'express';
 import supabase from '../db.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { getRepoDetails, listUserRepos } from '../lib/github.js';
+import { triggerRepoIngest, getMLGraph } from '../lib/ml.js';
 
 const router = Router();
 
@@ -88,7 +89,7 @@ router.post('/connect', authMiddleware, async (req, res) => {
         github_repo_url: `https://github.com/${fullName}`,
         name: cleanName,
         full_name: fullName,
-        status: 'connected',
+        status: 'pending',
         file_count: 0,
         node_count: 0,
       })
@@ -97,10 +98,111 @@ router.post('/connect', authMiddleware, async (req, res) => {
 
     if (error) throw error;
 
+    // Create ingest job and kick off ML analysis in background
+    const { data: job } = await supabase
+      .from('jobs')
+      .insert({
+        repo_id: repo.id,
+        type: 'ingest-repository',
+        status: 'running',
+        progress_pct: 0,
+      })
+      .select()
+      .single();
+
+    if (job) {
+      triggerRepoIngest(job.id, repo.id, repo.github_repo_url).catch(err => {
+        console.error(`[ML] Ingest error for repo ${repo.id}:`, err.message);
+      });
+    }
+
     res.json({ repo });
   } catch (err) {
     console.error('Connect repo error:', err);
     res.status(500).json({ error: 'Failed to connect repository' });
+  }
+});
+
+// POST /api/repos/:id/reindex - re-trigger ML analysis for a repo
+router.post('/:id/reindex', authMiddleware, async (req, res) => {
+  try {
+    const { data: repo } = await supabase
+      .from('repositories')
+      .select('*')
+      .eq('id', req.params.id)
+      .eq('user_id', req.user.id)
+      .single();
+
+    if (!repo) return res.status(404).json({ error: 'Repository not found' });
+
+    // Mark repo as pending
+    await supabase
+      .from('repositories')
+      .update({ status: 'pending' })
+      .eq('id', repo.id);
+
+    // Create a new ingest job
+    const { data: job } = await supabase
+      .from('jobs')
+      .insert({
+        repo_id: repo.id,
+        type: 'ingest-repository',
+        status: 'running',
+        progress_pct: 0,
+      })
+      .select()
+      .single();
+
+    if (job) {
+      triggerRepoIngest(job.id, repo.id, repo.github_repo_url).catch(err => {
+        console.error(`[ML] Reindex error for repo ${repo.id}:`, err.message);
+      });
+    }
+
+    res.json({ success: true, job_id: job?.id });
+  } catch (err) {
+    console.error('Reindex error:', err);
+    res.status(500).json({ error: 'Failed to start reindex' });
+  }
+});
+
+// GET /api/repos/:id/graph - get knowledge graph from ML analysis
+router.get('/:id/graph', authMiddleware, async (req, res) => {
+  try {
+    const { data: repo } = await supabase
+      .from('repositories')
+      .select('*')
+      .eq('id', req.params.id)
+      .eq('user_id', req.user.id)
+      .single();
+
+    if (!repo) return res.status(404).json({ error: 'Repository not found' });
+
+    if (repo.status !== 'ready') {
+      return res.status(400).json({ error: 'Repository is not yet indexed' });
+    }
+
+    // Get ML repo_id from ingest job
+    const { data: ingestJob } = await supabase
+      .from('jobs')
+      .select('outcome')
+      .eq('repo_id', repo.id)
+      .eq('type', 'ingest-repository')
+      .eq('status', 'complete')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    const mlRepoId = ingestJob?.outcome?.ml_repo_id;
+    if (!mlRepoId) {
+      return res.status(400).json({ error: 'Graph data not available' });
+    }
+
+    const graphData = await getMLGraph(mlRepoId);
+    res.json(graphData);
+  } catch (err) {
+    console.error('Graph error:', err);
+    res.status(500).json({ error: 'Failed to get graph data' });
   }
 });
 
