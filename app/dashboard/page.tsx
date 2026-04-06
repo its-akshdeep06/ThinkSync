@@ -662,6 +662,17 @@ function ComingSoonPage() {
 export default function DashboardPage() {
   const { isAuthenticated, isLoading } = useAuth()
 
+  // GitHub OAuth redirects here with ?code=... (because /dashboard is the registered callback URL).
+  // Forward to the dedicated callback page which exchanges the code for a token.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    const code = params.get('code')
+    if (code) {
+      window.location.replace(`/api/auth/callback?code=${encodeURIComponent(code)}`)
+    }
+  }, [])
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-ts-base flex items-center justify-center">

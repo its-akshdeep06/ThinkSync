@@ -1,4 +1,7 @@
-const API_BASE = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000').replace(/\/+$/, '');
+// In production (Vercel) NEXT_PUBLIC_API_URL is not set, so defaults to '' (same-origin).
+// Next.js API routes under /app/api/** serve all backend calls.
+// In local dev, set NEXT_PUBLIC_API_URL=http://localhost:4000 in .env.local to use the Express server.
+const API_BASE = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/+$/, '');
 
 type FetchOptions = RequestInit & {
   skipAuth?: boolean;
