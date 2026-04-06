@@ -8,6 +8,7 @@ import { ScrollReveal } from '@/components/scroll-reveal'
 import { FlowSteps } from '@/components/flow-steps'
 import { DynamicBackground } from '@/components/dynamic-background'
 import { GitHubConnectButton, GitHubIcon } from '@/components/github-icon'
+import { useAuth } from '@/components/auth-provider'
 
 const metrics = [
   { value: 80, suffix: '%', label: 'fewer bugs' },
@@ -92,6 +93,8 @@ function FeatureIcon({ type }: { type: string }) {
 }
 
 export default function LandingPage() {
+  const { isAuthenticated, login } = useAuth()
+
   return (
     <main className="relative min-h-screen">
       {/* Dynamic Background - covers entire page */}
@@ -136,9 +139,17 @@ export default function LandingPage() {
           </p>
           
           <div className="mt-10 flex flex-col sm:flex-row items-center gap-4">
-            <Link href="/dashboard">
-              <GitHubConnectButton size="large" />
-            </Link>
+            {isAuthenticated ? (
+              <Link href="/dashboard">
+                <button className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-wider text-ts-base bg-ts-emerald px-6 py-3 rounded hover:bg-ts-emerald/90 transition-colors">
+                  Go to Dashboard →
+                </button>
+              </Link>
+            ) : (
+              <button onClick={login}>
+                <GitHubConnectButton size="large" />
+              </button>
+            )}
             <Link 
               href="#features"
               className="font-mono text-[10px] uppercase tracking-wider text-ts-text-dim hover:text-ts-text-muted transition-colors"
@@ -195,7 +206,7 @@ export default function LandingPage() {
       </section>
       
       {/* Features Section */}
-      <section className="relative z-20 bg-ts-base py-24 px-4">
+      <section id="features" className="relative z-20 bg-ts-base py-24 px-4">
         <div className="max-w-4xl mx-auto">
           <ScrollReveal>
             <h2 className="font-mono text-[16px] font-medium text-ts-text-primary text-center mb-16">
@@ -283,12 +294,21 @@ export default function LandingPage() {
             <p className="font-mono text-[16px] text-ts-text-primary mb-8">
               Ready to ship with confidence?
             </p>
-            <Link 
-              href="/dashboard"
-              className="inline-block font-mono text-[10px] uppercase tracking-wider text-ts-emerald border border-ts-emerald px-6 py-3 rounded hover:bg-ts-emerald-dim transition-colors"
-            >
-              Connect GitHub
-            </Link>
+            {isAuthenticated ? (
+              <Link 
+                href="/dashboard"
+                className="inline-block font-mono text-[10px] uppercase tracking-wider text-ts-base bg-ts-emerald px-6 py-3 rounded hover:bg-ts-emerald/90 transition-colors"
+              >
+                Go to Dashboard
+              </Link>
+            ) : (
+              <button
+                onClick={login}
+                className="inline-block font-mono text-[10px] uppercase tracking-wider text-ts-emerald border border-ts-emerald px-6 py-3 rounded hover:bg-ts-emerald-dim transition-colors"
+              >
+                Connect GitHub
+              </button>
+            )}
           </ScrollReveal>
         </div>
       </section>
