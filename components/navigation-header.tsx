@@ -13,7 +13,7 @@ export function NavigationHeader({
   currentPath = '', 
   showNewIntent = true,
 }: NavigationHeaderProps) {
-  const { user, isAuthenticated, logout } = useAuth()
+  const { user, isAuthenticated, logout, login } = useAuth()
   const initials = user?.login?.slice(0, 2).toUpperCase() || 'TS'
 
   return (
@@ -73,12 +73,14 @@ export function NavigationHeader({
             </button>
           </div>
         ) : (
-          <Link 
-            href="/"
-            className="font-mono text-[10px] text-ts-text-muted hover:text-ts-emerald transition-colors"
+          <button
+            onClick={login}
+            className="inline-flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-wider text-ts-emerald border border-ts-emerald/60 px-3 py-1.5 rounded hover:bg-ts-emerald-dim transition-colors"
+            title="Login with GitHub"
           >
-            Sign In
-          </Link>
+            <GitHubIcon size={12} />
+            GitHub Login
+          </button>
         )}
       </div>
     </header>

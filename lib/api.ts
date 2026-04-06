@@ -1,4 +1,4 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+const API_BASE = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000').replace(/\/+$/, '');
 
 type FetchOptions = RequestInit & {
   skipAuth?: boolean;
@@ -45,14 +45,35 @@ export function getUser(): any | null {
 }
 
 /**
- * Core fetch wrapper with auth header injection.
+ * Custom error class for API errors with extra context.
+ */
+export class ApiError extends Error {
+  status: number;
+  isNetworkError: boolean;
+
+  constructor(message: string, status: number = 0, isNetworkError: boolean = false) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.isNetworkError = isNetworkError;
+  }
+}
+
+/**
+ * Core fetch wrapper with auth header injection and robust error handling.
  */
 async function apiFetch<T = any>(path: string, options: FetchOptions = {}): Promise<T> {
   const { skipAuth, ...fetchOptions } = options;
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
+    Accept: 'application/json',
     ...(fetchOptions.headers as Record<string, string> || {}),
   };
+
+  const hasBody = fetchOptions.body !== undefined && fetchOptions.body !== null;
+  const isFormData = typeof FormData !== 'undefined' && fetchOptions.body instanceof FormData;
+  if (hasBody && !isFormData && !headers['Content-Type']) {
+    headers['Content-Type'] = 'application/json';
+  }
 
   if (!skipAuth) {
     const token = getToken();
@@ -61,26 +82,43 @@ async function apiFetch<T = any>(path: string, options: FetchOptions = {}): Prom
     }
   }
 
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...fetchOptions,
-    headers,
-    credentials: 'include',
-  });
+  let res: Response;
+  try {
+    const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+    res = await fetch(`${API_BASE}${normalizedPath}`, {
+      ...fetchOptions,
+      headers,
+      credentials: 'include',
+    });
+  } catch (err: any) {
+    // Network error — backend is unreachable
+    throw new ApiError(
+      'Cannot connect to the server. Please make sure the backend is running.',
+      0,
+      true
+    );
+  }
 
   if (res.status === 401) {
     clearToken();
     if (typeof window !== 'undefined' && !window.location.pathname.includes('/api/auth')) {
       window.location.href = '/';
     }
-    throw new Error('Authentication required');
+    throw new ApiError('Authentication required', 401);
   }
 
   if (!res.ok) {
-    const body = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(body.error || `Request failed: ${res.status}`);
+    const body = await res
+      .json()
+      .catch(async () => ({ error: (await res.text().catch(() => '')) || res.statusText }));
+    throw new ApiError(body.error || `Request failed: ${res.status}`, res.status);
   }
 
-  return res.json();
+  if (res.status === 204) {
+    return {} as T;
+  }
+
+  return res.json().catch(() => ({} as T));
 }
 
 // ─── Auth ───────────────────────────────────────────────────
@@ -122,6 +160,24 @@ export const api = {
 
     delete: (id: string) =>
       apiFetch<{ success: boolean }>(`/api/repos/${id}`, { method: 'DELETE' }),
+
+    reindex: (id: string) =>
+      apiFetch<{ success: boolean; job_id?: string }>(`/api/repos/${id}/reindex`, { method: 'POST' }),
+
+    getGraph: (id: string) =>
+      apiFetch<{ files: string[]; nodes: any[]; edges: any[]; stats: any }>(`/api/repos/${id}/graph`),
+  },
+
+  // ─── Analyze (Intent → Plan → PR) ────────────────────────
+  analyze: {
+    submit: (repoId: string, intentText: string) =>
+      apiFetch<{ job_id: string }>('/api/analyze/submit', {
+        method: 'POST',
+        body: JSON.stringify({ repo_id: repoId, intent_text: intentText }),
+      }),
+
+    getResult: (jobId: string) =>
+      apiFetch<{ job: any; result: any; repo: any }>(`/api/analyze/${jobId}/result`),
   },
 
   // ─── Jobs ───────────────────────────────────────────────────

@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { api } from '@/lib/api'
-import { DynamicBackground } from '@/components/dynamic-background'
 import { GitHubIcon } from '@/components/github-icon'
 
 interface GitHubRepo {
@@ -40,7 +39,11 @@ export function ConnectRepoModal({ isOpen, onClose, onConnected }: ConnectRepoMo
       const { repos: ghRepos } = await api.repos.listGitHub()
       setRepos(ghRepos)
     } catch (err: any) {
-      setError(err.message)
+      if (err?.isNetworkError) {
+        setError('Backend server is not running. Start it with: cd backend && npm run dev')
+      } else {
+        setError(err.message || 'Failed to load repositories')
+      }
     } finally {
       setIsLoading(false)
     }
@@ -60,10 +63,12 @@ export function ConnectRepoModal({ isOpen, onClose, onConnected }: ConnectRepoMo
       onConnected()
       onClose()
     } catch (err: any) {
-      if (err.message.includes('already connected')) {
+      if (err?.isNetworkError) {
+        setError('Backend server is offline. Cannot connect repository right now.')
+      } else if (err.message.includes('already connected')) {
         setError(`${repo.name} is already connected`)
       } else {
-        setError(err.message)
+        setError(err.message || 'Failed to connect repository')
       }
     } finally {
       setConnecting(null)

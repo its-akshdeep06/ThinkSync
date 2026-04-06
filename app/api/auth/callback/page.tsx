@@ -28,6 +28,19 @@ function CallbackHandler() {
         setToken(token)
         setUser(user)
 
+        const pendingRepoUrl = localStorage.getItem('thinksync_pending_repo_url')
+        if (pendingRepoUrl) {
+          setStatus('Connecting repository...')
+          try {
+            await api.repos.connect(pendingRepoUrl)
+            localStorage.setItem('thinksync_repo_connected', '1')
+          } catch {
+            // Ignore connect failures here; user can retry from dashboard.
+          } finally {
+            localStorage.removeItem('thinksync_pending_repo_url')
+          }
+        }
+
         setStatus('Redirecting to dashboard...')
         // Short delay so user sees the success state
         setTimeout(() => {

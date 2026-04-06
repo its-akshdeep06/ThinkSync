@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { useEffect, useState } from 'react'
 import { KnowledgeGraph } from '@/components/knowledge-graph'
 import { CharacterReveal } from '@/components/character-reveal'
 import { CountUp } from '@/components/count-up'
@@ -9,6 +10,7 @@ import { FlowSteps } from '@/components/flow-steps'
 import { DynamicBackground } from '@/components/dynamic-background'
 import { GitHubConnectButton, GitHubIcon } from '@/components/github-icon'
 import { useAuth } from '@/components/auth-provider'
+import { api } from '@/lib/api'
 
 const metrics = [
   { value: 80, suffix: '%', label: 'fewer bugs' },
@@ -94,11 +96,83 @@ function FeatureIcon({ type }: { type: string }) {
 
 export default function LandingPage() {
   const { isAuthenticated, login } = useAuth()
+  const [repoUrl, setRepoUrl] = useState('')
+  const [isRepoConnecting, setIsRepoConnecting] = useState(false)
+  const [repoMessage, setRepoMessage] = useState<string | null>(null)
+  const [repoToast, setRepoToast] = useState<string | null>(null)
+
+  useEffect(() => {
+    const connected = localStorage.getItem('thinksync_repo_connected')
+    if (!connected) return
+    setRepoToast('Repository connected successfully.')
+    localStorage.removeItem('thinksync_repo_connected')
+    const timer = setTimeout(() => setRepoToast(null), 3000)
+    return () => clearTimeout(timer)
+  }, [])
+
+  const handleRepoConnect = async () => {
+    const cleaned = repoUrl.trim()
+    if (!cleaned) {
+      setRepoMessage('Please paste a GitHub repository URL first.')
+      return
+    }
+
+    if (!cleaned.includes('github.com/')) {
+      setRepoMessage('Please enter a valid GitHub repository URL.')
+      return
+    }
+
+    if (!isAuthenticated) {
+      localStorage.setItem('thinksync_pending_repo_url', cleaned)
+      setRepoMessage('Sign in with GitHub to finish connecting this repository.')
+      await login()
+      return
+    }
+
+    setIsRepoConnecting(true)
+    setRepoMessage(null)
+    try {
+      await api.repos.connect(cleaned)
+      setRepoMessage('Repository connected successfully. Redirecting to dashboard...')
+      setRepoUrl('')
+      setTimeout(() => {
+        window.location.href = '/dashboard'
+      }, 700)
+    } catch (err: any) {
+      setRepoMessage(err?.message || 'Failed to connect repository.')
+    } finally {
+      setIsRepoConnecting(false)
+    }
+  }
 
   return (
     <main className="relative min-h-screen">
       {/* Dynamic Background - covers entire page */}
       <DynamicBackground />
+
+      {repoToast && (
+        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-40">
+          <div className="px-4 py-2 rounded border border-ts-emerald/40 bg-ts-surface/95 backdrop-blur-sm">
+            <p className="font-mono text-[9px] uppercase tracking-wider text-ts-emerald">
+              ✓ {repoToast}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Top-right auth action */}
+      <div className="fixed top-4 right-4 z-30">
+        {isAuthenticated ? (
+          <Link
+            href="/dashboard"
+            className="inline-flex items-center gap-2 font-mono text-[9px] uppercase tracking-wider text-ts-base bg-ts-emerald px-3 py-2 rounded hover:bg-ts-emerald/90 transition-colors"
+          >
+            Dashboard
+          </Link>
+        ) : (
+          <GitHubConnectButton size="small" onClick={login} />
+        )}
+      </div>
       
       {/* Hero Section */}
       <section className="relative h-screen flex flex-col items-center justify-center overflow-hidden">
@@ -146,9 +220,7 @@ export default function LandingPage() {
                 </button>
               </Link>
             ) : (
-              <button onClick={login}>
-                <GitHubConnectButton size="large" />
-              </button>
+              <GitHubConnectButton size="large" onClick={login} />
             )}
             <Link 
               href="#features"
@@ -156,6 +228,35 @@ export default function LandingPage() {
             >
               Learn more
             </Link>
+          </div>
+
+          <div className="mt-6 w-full max-w-xl">
+            <div className="bg-ts-surface/70 border border-ts-border rounded p-3">
+              <p className="font-mono text-[8px] uppercase tracking-wider text-ts-text-dim mb-2">
+                Quick Connect by Repo URL
+              </p>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <input
+                  type="url"
+                  value={repoUrl}
+                  onChange={(e) => setRepoUrl(e.target.value)}
+                  placeholder="https://github.com/owner/repository"
+                  className="flex-1 px-3 py-2 bg-ts-elevated border border-ts-border rounded font-mono text-[10px] text-ts-text-primary placeholder:text-ts-text-ghost focus:outline-none focus:border-ts-emerald/50"
+                />
+                <button
+                  onClick={handleRepoConnect}
+                  disabled={isRepoConnecting}
+                  className="px-4 py-2 font-mono text-[9px] uppercase tracking-wider text-ts-emerald border border-ts-emerald rounded hover:bg-ts-emerald-dim transition-colors disabled:opacity-60"
+                >
+                  {isRepoConnecting ? 'Connecting...' : 'Add Repo'}
+                </button>
+              </div>
+              {repoMessage && (
+                <p className="mt-2 font-mono text-[8px] text-ts-text-dim">
+                  {repoMessage}
+                </p>
+              )}
+            </div>
           </div>
         </div>
         
@@ -187,19 +288,18 @@ export default function LandingPage() {
           </ScrollReveal>
           
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-            {metrics.map((metric, i) => (
-              <ScrollReveal key={metric.label} delay={i * 150}>
-                <div className="text-center">
-                  <CountUp 
-                    end={metric.value}
-                    suffix={metric.suffix}
-                    className="font-mono text-[42px] font-medium text-ts-emerald"
-                  />
-                  <p className="mt-2 font-sans text-[10px] text-ts-text-muted">
-                    {metric.label}
-                  </p>
-                </div>
-              </ScrollReveal>
+            {metrics.map((metric) => (
+              <div key={metric.label} className="text-center">
+                <CountUp 
+                  end={metric.value}
+                  suffix={metric.suffix}
+                  duration={1500}
+                  className="font-mono text-[42px] font-medium text-ts-emerald"
+                />
+                <p className="mt-2 font-sans text-[10px] text-ts-text-muted">
+                  {metric.label}
+                </p>
+              </div>
             ))}
           </div>
         </div>

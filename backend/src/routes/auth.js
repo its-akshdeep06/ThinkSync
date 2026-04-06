@@ -4,6 +4,7 @@ import supabase from '../db.js';
 import { getGitHubUser } from '../lib/github.js';
 
 const router = Router();
+const isProduction = process.env.NODE_ENV === 'production';
 
 // GET /api/auth/github - redirect to GitHub OAuth
 router.get('/github', (req, res) => {
@@ -79,6 +80,14 @@ router.post('/github/callback', async (req, res) => {
       { expiresIn: '7d' }
     );
 
+    res.cookie('token', token, {
+      httpOnly: true,
+      sameSite: isProduction ? 'none' : 'lax',
+      secure: isProduction,
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+      path: '/',
+    });
+
     res.json({
       token,
       user: {
@@ -116,7 +125,12 @@ router.get('/me', async (req, res) => {
 
 // POST /api/auth/logout
 router.post('/logout', (req, res) => {
-  res.clearCookie('token');
+  res.clearCookie('token', {
+    httpOnly: true,
+    sameSite: isProduction ? 'none' : 'lax',
+    secure: isProduction,
+    path: '/',
+  });
   res.json({ success: true });
 });
 
