@@ -14,7 +14,8 @@ export async function getAuthUser(req: NextRequest): Promise<any | null> {
   if (!token) return null
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as any
+    const jwtSecret = process.env.JWT_SECRET ?? 'thinksync-jwt-secret-k9x2m7p4q8r3n6w1'
+    const decoded = jwt.verify(token, jwtSecret) as any
     const { data: user } = await supabase
       .from('users')
       .select('*')
@@ -30,9 +31,10 @@ export async function getAuthUser(req: NextRequest): Promise<any | null> {
  * Sign a JWT for a user row.
  */
 export function createToken(user: { id: string; github_id: number; login: string }): string {
+  const jwtSecret = process.env.JWT_SECRET ?? 'thinksync-jwt-secret-k9x2m7p4q8r3n6w1'
   return jwt.sign(
     { userId: user.id, githubId: user.github_id, login: user.login },
-    process.env.JWT_SECRET!,
+    jwtSecret,
     { expiresIn: '7d' }
   )
 }

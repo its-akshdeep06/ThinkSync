@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase-server'
 import { createToken } from '@/lib/auth-server'
 
+const GITHUB_CLIENT_ID = process.env.GITHUB_CLIENT_ID ?? 'Ov23liwoGI6vDrWr9VBz'
+const GITHUB_CLIENT_SECRET =
+  process.env.GITHUB_CLIENT_SECRET ?? '115e33eb5bfa1967622ace4ed14e5efbc81e90d5'
+
 // POST /api/auth/github/callback — exchange GitHub OAuth code for a JWT.
 export async function POST(req: NextRequest) {
   try {
@@ -13,8 +17,8 @@ export async function POST(req: NextRequest) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify({
-        client_id: process.env.GITHUB_CLIENT_ID,
-        client_secret: process.env.GITHUB_CLIENT_SECRET,
+        client_id: GITHUB_CLIENT_ID,
+        client_secret: GITHUB_CLIENT_SECRET,
         code,
       }),
     })
